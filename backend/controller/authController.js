@@ -1,9 +1,9 @@
-import User from "../model/user.js";
 import jwt from "jsonwebtoken";
+import User from "../model/userModel.js";
 
 // register function
 export async function register(req, res){
-    const {email, username, password} = req.body;
+    const {email, password} = req.body;
 
     try{
         //check if user already exists
@@ -13,7 +13,6 @@ export async function register(req, res){
         // create new user
         const newUser = new User({
             email,
-            username,
             password,
         });
 
@@ -40,7 +39,7 @@ export async function register(req, res){
 
 // login function 
 export async function login(req, res){
-    const {email, username, password} = req.body;
+    const {email, password} = req.body;
 
     try{
         //find user by email

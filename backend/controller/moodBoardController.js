@@ -1,4 +1,4 @@
-import MoodBoard from "../model/MoodBoard.js";
+import MoodBoard from "../model/moodBoardModel.js";
 
 // create new mood board
 export async function createMoodBoard(req, res) {
