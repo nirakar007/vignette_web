@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-table": "^8.20.6",
     "frontend": "file:",
+    "motion": "^11.16.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
