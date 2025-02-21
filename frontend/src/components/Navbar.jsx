@@ -7,7 +7,7 @@ const Navbar = () => {
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <nav className="bg-primary text-black py-4">
+    <nav className="bg-gradient-to-b from-white to-gray-100 text-black py-4">
       <div className="container mx-auto px-4 flex items-center justify-between">
         {/* Logo */}
         <div
@@ -22,18 +22,12 @@ const Navbar = () => {
         </div>
 
         {/* Links for Desktop */}
-        <ul className="hidden md:flex space-x-6 text-lg">
+        <ul className="hidden md:flex space-x-10 text-xl">
           <li
             className="cursor-pointer hover:text-gray-500 transition-colors duration-100"
             onClick={() => navigate("/features")}
           >
             Features
-          </li>
-          <li
-            className="cursor-pointer hover:text-gray-500 transition-colors duration-100"
-            onClick={() => navigate("/about")}
-          >
-            About
           </li>
           <li
             className="cursor-pointer hover:text-gray-500 transition-colors duration-100"
@@ -59,7 +53,7 @@ const Navbar = () => {
           </button>
           <button
             onClick={() => navigate("/sign-up")}
-            className="py-2 px-4 rounded bg-logo text-white hover:scale-105 transition-all duration-300"
+            className="py-2 px-4 rounded bg-gray-900 text-white hover:scale-105 transition-all duration-300"
           >
             Sign up
           </button>
