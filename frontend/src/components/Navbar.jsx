@@ -24,19 +24,19 @@ const Navbar = () => {
         {/* Links for Desktop */}
         <ul className="hidden md:flex space-x-6 text-lg">
           <li
-            className="cursor-pointer hover:text-gray-500 transition-colors duration-300"
+            className="cursor-pointer hover:text-gray-500 transition-colors duration-100"
             onClick={() => navigate("/features")}
           >
             Features
           </li>
           <li
-            className="cursor-pointer hover:text-gray-500 transition-colors duration-300"
+            className="cursor-pointer hover:text-gray-500 transition-colors duration-100"
             onClick={() => navigate("/about")}
           >
             About
           </li>
           <li
-            className="cursor-pointer hover:text-gray-500 transition-colors duration-300"
+            className="cursor-pointer hover:text-gray-500 transition-colors duration-100"
             onClick={() => navigate("/pricing")}
           >
             Pricing

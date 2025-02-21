@@ -1,52 +1,53 @@
+import axios from "axios";
 import React, { useState } from "react";
 import { FaApple } from "react-icons/fa";
 import { FcGoogle } from "react-icons/fc";
-import { useNavigate } from "react-router-dom"; // Import for navigation
-import RightPanelImage from "../assets/images/signup-picture.png";
+import { useNavigate } from "react-router-dom";
 import InputField from "../components/shared/InputField";
 
 const RegisterPage = () => {
-  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
-  const navigate = useNavigate(); // Hook for navigation
 
-  const handleSubmit = (e) => {
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Input Validation
-    if (!name || !email || !password || !confirmPassword) {
-      setError("All fields are required.");
-      return;
-    }
+    setError("");
 
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
+    try {
+      const { data } = await axios.post(
+        "http://localhost:5000/api/v1/auth/register",
+        { username, email, password },
+        { headers: { "Content-Type": "application/json" } }
+      );
+
+      // Store token and navigate to dashboard after successful registration
+      localStorage.setItem("token", response.data.token);
+      navigate("/sign-in");
+    } catch (err) {
+      setError(err.response?.data?.message || "Registration failed.");
     }
-
-    // Simulating user registration (e.g., saving to localStorage or sending to API)
-    const userData = { name, email, password };
-    localStorage.setItem("user", JSON.stringify(userData));
-
-    // Clear error (if any)
-    setError("");
-
-    // Redirect to Login Page
-    navigate("/sign-in");
   };
 
   return (
-    <div className="flex flex-col md:flex-row overflow-hidden">
+    <div className="flex flex-col justify-center md:flex-row overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute w-[300px] h-[300px] bg-purple-300/20 rounded-full blur-3xl -top-32 -left-32 animate-blob"></div>
+        <div className="absolute w-[300px] h-[300px] bg-blue-200 rounded-full blur-3xl top-1/2 -right-32 animate-blob animation-delay-2000"></div>
+        <div className="absolute w-[300px] h-[300px] bg-teal-300/30 rounded-full blur-3xl -bottom-32 left-1/4 animate-blob animation-delay-4000"></div>
+      </div>
+
       {/* Left Panel */}
-      <div className="flex bg-white flex-col justify-center items-start p-8 md:px-20">
+      <div className="flex z-10 bg-white flex-col justify-center items-start p-8 md:px-20 backdrop:blur-md rounded-md">
         <h1 className="text-3xl md:text-5xl font-bold mb-8 text-black">
           Get Started Now
         </h1>
@@ -56,21 +57,19 @@ const RegisterPage = () => {
         >
           {/* Error Message */}
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-          {/* Name Input */}
+
           <InputField
-            placeholder="Enter your name"
+            placeholder="Enter your username"
             type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
           />
-          {/* Email Input */}
           <InputField
             placeholder="Enter your email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          {/* Password Inputs */}
           <InputField
             placeholder="Enter your password"
             type="password"
@@ -83,21 +82,21 @@ const RegisterPage = () => {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
-          {/* Checkbox */}
+
           <div className="flex items-center space-x-2">
             <input type="checkbox" id="terms" className="w-4 h-4" required />
             <label htmlFor="terms" className="text-sm text-gray-500">
               I agree to the terms & policy
             </label>
           </div>
-          {/* Submit Button */}
+
           <button
             type="submit"
             className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-neutral-800"
           >
             Signup
           </button>
-          {/* Sign-in Options */}
+
           <div className="text-center mt-6">
             <p className="text-gray-500 text-sm mb-4">Or</p>
             <div className="flex justify-center space-x-4">
@@ -121,20 +120,6 @@ const RegisterPage = () => {
             </p>
           </div>
         </form>
-      </div>
-
-      {/* Right Panel */}
-      <div className="bg-black flex flex-col justify-center items-center relative overflow-hidden">
-        <h2 className="text-white text-3xl md:text-4xl font-bold mb-4 text-center">
-          Vignette, <br /> Remember everything!
-        </h2>
-        <div className="absolute inset-0 flex justify-center items-center">
-          <img
-            src={RightPanelImage}
-            alt="Signup Illustration"
-            className="h-full w-full object-contain"
-          />
-        </div>
       </div>
     </div>
   );
