@@ -1,82 +1,29 @@
 import axios from "axios";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import Toolbar from "./Toolbar";
 import { AuthContext } from "../../../context/AuthContext";
-
-const CanvasContent = () => {
-  const { state, dispatch } = useCanvas();
-  const { boardData, elements, activeTool } = state;
-
-  const handleCanvasClick = (e) => {
-    if (activeTool === 'text') {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const newElement = {
-        type: 'text',
-        content: 'New Text',
-        position: { x: e.clientX - rect.left - 100, y: e.clientY - rect.top - 50 },
-        size: { width: 200, height: 100 }
-      };
-      dispatch({ type: 'ADD_ELEMENT', payload: newElement });
-    }
-  };
-
-  if (state.loading) return <div className="loading-spinner">Loading...</div>;
-  if (state.error) return <div className="error-message">{state.error}</div>;
-
-  return (
-    <div className="relative w-full h-screen bg-gray-200">
-
-      <div 
-        className="absolute inset-0" 
-        onClick={handleCanvasClick}
-      >
-        {elements.map(element => {
-          switch (element.type) {
-            case 'text':
-              return <TextElement key={element._id} element={element} />;
-            case 'image':
-              return <ImageElement key={element._id} element={element} />;
-            case 'shape':
-              return <ShapeElement key={element._id} element={element} />;
-            default:
-              return null;
-          }
-        })}
-      </div>
-      
-      <div className="fixed top-4 left-4 bg-white p-4 rounded-lg shadow-lg">
-        <CanvasTools />
-      </div>
-    </div>
-  );
-};
-
-
-
+import CanvasElement from "./CanvasElement"; // Create this component
+import Toolbar from "./Toolbar";
 
 const MainCanvas = () => {
   const { boardId } = useParams();
   const { user } = useContext(AuthContext);
-  const [board, setBoard] = useState(null);
+  const [board, setBoard] = useState({ elements: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedElement, setSelectedElement] = useState(null);
+  const [drawingMode, setDrawingMode] = useState(false);
 
+  // Fetch board data
   useEffect(() => {
     const fetchBoard = async () => {
       try {
         const response = await axios.get(`/api/v1/boards/${boardId}`, {
-          headers: {
-            Authorization: `Bearer ${user?.token}`,
-            "Content-Type": "application/json",
-          },
+          headers: { Authorization: `Bearer ${user?.token}` },
         });
-
-        // Ensure elements array exists
-        const boardData = response.data.data || {};
         setBoard({
-          ...boardData,
-          elements: boardData.elements || [],
+          ...response.data.data,
+          elements: response.data.data?.elements || [],
         });
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load board");
@@ -85,69 +32,121 @@ const MainCanvas = () => {
       }
     };
 
-    if (boardId && user) {
-      fetchBoard();
-    }
+    if (boardId && user) fetchBoard();
   }, [boardId, user?.token]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
-      </div>
-    );
-  }
+  // Handle element updates
+  const updateElement = useCallback(
+    async (updatedEl) => {
+      try {
+        await axios.put(
+          `/api/v1/boards/${boardId}/elements/${updatedEl._id}`,
+          updatedEl,
+          { headers: { Authorization: `Bearer ${user?.token}` } }
+        );
+        setBoard((prev) => ({
+          ...prev,
+          elements: prev.elements.map((el) =>
+            el._id === updatedEl._id ? updatedEl : el
+          ),
+        }));
+      } catch (err) {
+        console.error("Update error:", err);
+      }
+    },
+    [boardId, user?.token]
+  );
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-screen text-red-500">
-        Error: {error}
-      </div>
-    );
-  }
+  // Handle new elements
+  const handleAddElement = useCallback(
+    async (newEl) => {
+      try {
+        const res = await axios.post(
+          `/api/v1/boards/${boardId}/elements`,
+          newEl,
+          { headers: { Authorization: `Bearer ${user?.token}` } }
+        );
+        setBoard((prev) => ({
+          ...prev,
+          elements: [...prev.elements, res.data],
+        }));
+      } catch (err) {
+        console.error("Create error:", err);
+      }
+    },
+    [boardId, user?.token]
+  );
 
-  if (!board) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        Board not found.
-      </div>
-    );
-  }
+  // Handle element deletion
+  const deleteElement = useCallback(
+    async (elementId) => {
+      try {
+        await axios.delete(`/api/v1/boards/${boardId}/elements/${elementId}`, {
+          headers: { Authorization: `Bearer ${user?.token}` },
+        });
+        setBoard((prev) => ({
+          ...prev,
+          elements: prev.elements.filter((el) => el._id !== elementId),
+        }));
+      } catch (err) {
+        console.error("Delete error:", err);
+      }
+    },
+    [boardId, user?.token]
+  );
+
+  // Handle text content changes
+  const handleContentChange = (elementId, newContent) => {
+    setBoard((prev) => ({
+      ...prev,
+      elements: prev.elements.map((el) =>
+        el._id === elementId ? { ...el, content: newContent } : el
+      ),
+    }));
+    // Debounce the API update
+    setTimeout(() => {
+      const element = board.elements.find((el) => el._id === elementId);
+      if (element) updateElement({ ...element, content: newContent });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.key === "Delete" && selectedElement) {
+        deleteElement(selectedElement);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [selectedElement, deleteElement]);
+
+  if (loading) return <div className="loading-spinner">Loading...</div>;
+  if (error) return <div className="error-message">{error}</div>;
 
   return (
-    <div className="relative w-full h-screen bg-gray-200">
-      
-      {board.elements?.map((element) => (
-        <div
-          key={element._id}
-          className="absolute bg-white p-3 shadow-md rounded-md cursor-move"
-          style={{
-            top: `${element.position?.y || 0}px`,
-            left: `${element.position?.x || 0}px`,
-            width: `${element.size?.width || 100}px`,
-            height: `${element.size?.height || 100}px`,
-          }}
-        >
-          {element.type === "text" && (
-            <p className="w-full h-full outline-none">{element.content}</p>
-          )}
-          {element.type === "image" && (
-            <img
-              src={element.src}
-              alt="Board element"
-              className="w-full h-full object-contain"
-            />
-          )}
-        </div>
-      ))}
+    <div className="relative w-full h-screen bg-gray-50">
+      {/* Main Canvas Area */}
+      <div className="absolute inset-0">
+        {board.elements.map((element) => (
+          <CanvasElement
+            key={element._id}
+            element={element}
+            isSelected={selectedElement === element._id}
+            drawingMode={drawingMode}
+            onSelect={setSelectedElement}
+            onUpdate={updateElement}
+            onDelete={deleteElement}
+            onContentChange={handleContentChange}
+          />
+        ))}
+      </div>
+
       <Toolbar
         boardId={boardId}
-        onAddElement={(newElement) =>
-          setBoard((prev) => ({
-            ...prev,
-            elements: [...prev.elements, newElement],
-          }))
-        }
+        drawingMode={drawingMode}
+        setDrawingMode={setDrawingMode}
+        onAddElement={handleAddElement}
       />
     </div>
   );
