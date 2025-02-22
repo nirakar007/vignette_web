@@ -1,8 +1,8 @@
 import { Route, Routes } from "react-router-dom";
+import MainCanvas from "../components/specific/Canvas/MainCanvas";
 import LandingPage from "../pages/LandingPage";
 import LoginPage from "../pages/LoginPage";
 import Dashboard from "../pages/private_pages/Dashboard";
-import MainCanvas from "../pages/private_pages/MainCanvas";
 import ProfilePage from "../pages/private_pages/ProfilePage";
 import AppFeatures from "../pages/public_pages/AppFeatures";
 import Pricings from "../pages/public_pages/PricingPage";
@@ -13,7 +13,7 @@ const routes = [
   { path: "/sign-in", element: <LoginPage /> },
   { path: "/sign-up", element: <RegisterPage /> },
   { path: "/dashboard", element: <Dashboard /> },
-  { path: "/boards/:boardId/canvas", element: <MainCanvas /> }, 
+  { path: "/boards/:boardId/canvas", element: <MainCanvas /> },
   { path: "/features", element: <AppFeatures /> },
   { path: "/pricing", element: <Pricings /> },
   { path: "/profile", element: <ProfilePage /> },
