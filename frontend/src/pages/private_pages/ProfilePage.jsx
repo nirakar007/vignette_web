@@ -13,14 +13,24 @@ import { AuthContext } from "../../context/AuthContext";
 
 const ProfilePage = () => {
   const { user: authUser } = useContext(AuthContext);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [image, setImage] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [previewImage, setPreviewImage] = useState("");
 
+  // Update handleImageChange to create preview
   const handleImageChange = (event) => {
-    setImage(event.target.files[0]);
+    const file = event.target.files[0];
+    if (file) {
+      setImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewImage(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const uploadProfilePicture = async () => {
@@ -46,16 +56,43 @@ const ProfilePage = () => {
         }
       );
 
-      setUser((prevUser) => ({
-        ...prevUser,
-        profilePicture: response.data.data, // ✅ Corrected: Use response.data.data directly
-      }));
+      // Safe state update with null check
+      setUser((prevUser) => {
+        if (!prevUser) {
+          return {
+            profilePicture: response.data.data,
+            username: "Unknown User",
+            email: "",
+            createdAt: new Date(),
+            boardsCount: 0,
+            collaborations: 0,
+          };
+        }
+        return {
+          ...prevUser,
+          profilePicture: response.data.data,
+        };
+      });
     } catch (error) {
       console.error("Upload failed:", error);
     } finally {
       setUploading(false);
+      setImage(null);
     }
   };
+
+  // In the img tag, add cache busting and ensure absolute URL
+  <img
+    src={
+      user?.profilePicture ? (
+        `http://localhost:5000${user.profilePicture}`
+      ) : (
+        <FaUser />
+      )
+    }
+    alt="Profile"
+    className="w-32 h-32 rounded-full border-4 border-cyan-100"
+  />;
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -86,7 +123,7 @@ const ProfilePage = () => {
 
   if (loading) return <div className="text-center p-6">Loading...</div>;
   if (error) return <div className="text-center p-6 text-red-500">{error}</div>;
-  if (!user)
+  if (Object.keys(user).length === 0)
     return <div className="text-center p-6">Could not load profile.</div>;
 
   return (
@@ -94,14 +131,23 @@ const ProfilePage = () => {
       <div className="max-w-4xl mx-auto">
         {/* Profile Header */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex flex-col md:flex-row items-center gap-6">
+          <div className="flex flex-col md:flex-row items-center gap-10">
             <div className="relative">
-              <img
-                src={user.profilePicture || "/assets/images/default.jpg"}
-                alt="Profile"
-                className="w-32 h-32 rounded-full border-4 border-cyan-100"
-              />
-
+              {previewImage ? (
+                <img
+                  src={previewImage}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+              ) : user?.profilePicture ? (
+                <img
+                  src={`http://localhost:5000${user.profilePicture}`}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <FaUser className="text-gray-400 text-4xl" />
+              )}
               <input
                 type="file"
                 accept="image/*"
@@ -111,10 +157,10 @@ const ProfilePage = () => {
               />
 
               <button
-                className="absolute bottom-0 right-0 bg-cyan-500 p-2 rounded-full hover:bg-cyan-600 transition"
+                className="absolute top-0 right-0 bg-cyan-500 p-2 rounded-full hover:bg-cyan-600 transition"
                 onClick={() => document.getElementById("fileInput").click()}
               >
-                <FaEdit className="text-white text-lg" />
+                <FaEdit className="text-white text-md" />
               </button>
 
               {image && (
@@ -129,9 +175,8 @@ const ProfilePage = () => {
 
             <div className="text-center md:text-left">
               <h1 className="text-3xl font-bold text-cyan-800 mb-2">
-                {user.username}
+                {user?.username}
               </h1>
-              <p className="text-blue-600 mb-4">{user.bio || "No bio yet."}</p>
               <div className="flex gap-4 justify-center md:justify-start">
                 <button className="bg-cyan-500 text-white px-6 py-2 rounded-full hover:bg-cyan-600 flex items-center gap-2">
                   <FaPalette />
@@ -150,7 +195,7 @@ const ProfilePage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <StatCard
             icon={<MdWorkspaces />}
-            value={user.boardsCount || 0}
+            value={user?.boardsCount || 0}
             label="Boards Created"
           />
 
@@ -189,7 +234,7 @@ const InfoCard = ({ icon, label, value }) => (
   <div className="flex items-center gap-4 p-4 hover:bg-cyan-50 rounded-xl transition">
     <div className="p-3 bg-cyan-100 rounded-full text-cyan-600">{icon}</div>
     <div>
-      <p className="text-sm text-blue-600">{label}</p>
+      <p className="text-sm text-cyan-800">{label}</p>
       <p className="font-medium text-cyan-800">{value}</p>
     </div>
   </div>
@@ -203,7 +248,7 @@ const StatCard = ({ icon, value, label }) => (
       </div>
       <div>
         <h3 className="text-2xl font-bold text-cyan-800">{value}</h3>
-        <p className="text-blue-600">{label}</p>
+        <p className="text-cyan-800">{label}</p>
       </div>
     </div>
   </div>
