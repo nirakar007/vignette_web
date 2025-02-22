@@ -137,13 +137,13 @@ const ProfilePage = () => {
                 <img
                   src={previewImage}
                   alt="Preview"
-                  className="w-full h-full object-cover"
+                  className="w-200 h-28 object-cover"
                 />
               ) : user?.profilePicture ? (
                 <img
                   src={`http://localhost:5000${user.profilePicture}`}
                   alt="Profile"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover rounded-md"
                 />
               ) : (
                 <FaUser className="text-gray-400 text-4xl" />
@@ -157,16 +157,16 @@ const ProfilePage = () => {
               />
 
               <button
-                className="absolute top-0 right-0 bg-cyan-500 p-2 rounded-full hover:bg-cyan-600 transition"
+                className="absolute bottom-0 right-0 border-4 border-cyan-200 bg-cyan-500 p-2 rounded-tl hover:bg-cyan-600 transition"
                 onClick={() => document.getElementById("fileInput").click()}
               >
-                <FaEdit className="text-white text-md" />
+                <FaEdit className="text-white text-xl" />
               </button>
 
               {image && (
                 <button
                   onClick={uploadProfilePicture}
-                  className="mt-2 bg-green-500 text-white px-4 py-1 rounded"
+                  className="mt-2 bg-teal-500 text-white px-4 py-1 rounded"
                 >
                   {uploading ? "Uploading..." : "Save"}
                 </button>
