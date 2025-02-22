@@ -2,7 +2,7 @@ import axios from "axios";
 import { motion } from "framer-motion";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { FaUserCircle } from "react-icons/fa";
-import { MdLogout, MdNotes, MdSearch } from "react-icons/md";
+import { MdLogout, MdNotes } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import KanbanBoard from "../../components/specific/KanbanBoardUI";
 import { AuthContext } from "../../context/AuthContext"; // Import AuthContext
@@ -142,17 +142,7 @@ const Dashboard = () => {
               <span>What's New Today?</span>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <input
-              type="text"
-              placeholder="Search Board..."
-              className="border-b hover:border-logo px-4 py-2 focus:border-b-2 focus:outline-none w-full max-w-xs transition-all duration-300"
-            />
-            <button>
-              <MdSearch className="text-xl" />
-            </button>
-          </div>
-        </motion.header>
+        `</motion.header>
 
         {/* Content */}
         <div className="flex flex-col md:flex-row flex-grow justify-between">
