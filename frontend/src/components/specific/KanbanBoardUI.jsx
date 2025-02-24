@@ -17,9 +17,9 @@ const KanbanBoard = () => {
   const [boards, setBoards] = useState([]);
   const [sortBy, setSortBy] = useState("all");
   const [searchQuery, setSearchQuery] = useState(""); // New state for search query
-  const [isSearching, setIsSearching] = useState(false);
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+  const [loading, setLoading] = useState(false); // Add loading state
 
   const debounce = (func, delay) => {
     let timeoutId;
@@ -185,7 +185,7 @@ const KanbanBoard = () => {
     } catch (error) {
       console.error("Error fetching boards:", error.response?.data || error);
     } finally {
-      setIsSearching(false);
+      setLoading(false);
     }
   }, 300);
 
@@ -224,9 +224,9 @@ const KanbanBoard = () => {
     <div className="text-center mt-16">
       {" "}
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
-      <p className="mt-4 text-gray-500">Searching boards...</p>{" "}
+      <p className="mt-4 text-gray-500">Loading boards...</p>{" "}
     </div>
-  ); // Add empty state
+  );
 
   const renderEmptyState = () => (
     <div className="text-center mt-16 text-gray-400">
@@ -239,6 +239,10 @@ const KanbanBoard = () => {
       </p>{" "}
     </div>
   );
+
+  if (loading) {
+    return renderLoading();
+  }
 
   return (
     <div className="p-2 min-h-screen mx-2 bg-white rounded-md">
@@ -271,19 +275,19 @@ const KanbanBoard = () => {
       `}</style>
 
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-2">
           <h2 className="text-3xl font-senibold text-neutral-800">My Boards</h2>
 
           <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-            <div className="relative flex-1 max-w-md">
+            <div className="relative flex-1 max-w-md p-2">
               <input
                 type="text"
                 placeholder="Search boards by name"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="px-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="px-4 py-4 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               />
-              <MdSearch className="absolute right-3 top-3 text-gray-400 text-xl" />
+              <MdSearch className="absolute right-0 top-0 bg-white text-gray-400 text-xl border rounded-sm" />
             </div>
 
             <div className="flex items-center bg-white rounded-lg p-1 shadow-sm">
