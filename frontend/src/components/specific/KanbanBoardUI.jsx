@@ -1,5 +1,5 @@
 import axios from "axios";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import { DragDropContext, Draggable, Droppable } from "react-beautiful-dnd";
 import {
   MdAdd,
@@ -162,7 +162,9 @@ const KanbanBoard = () => {
     }
   };
 
-  const fetchBoards = debounce(async (query = "") => {
+  const fetchBoards = useCallback(async () => {
+    // Remove debounce for now, useCallback for effect dependency
+    setLoading(true); // Start loading
     const token = localStorage.getItem("token");
 
     if (!token) {
@@ -172,12 +174,8 @@ const KanbanBoard = () => {
     }
 
     try {
-      let url = "http://localhost:5000/api/v1/boards/getAllBoards";
-      if (query) {
-        url = `http://localhost:5000/api/v1/boards/search?name=${encodeURIComponent(
-          query
-        )}`;
-      }
+      const url = "http://localhost:5000/api/v1/boards/getAllBoards"; // Always fetch all boards
+
       const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -185,13 +183,13 @@ const KanbanBoard = () => {
     } catch (error) {
       console.error("Error fetching boards:", error.response?.data || error);
     } finally {
-      setLoading(false);
+      setLoading(false); // End loading
     }
-  }, 300);
+  }, [navigate]); // Add navigate as dependency for useCallback
 
   useEffect(() => {
-    fetchBoards(searchQuery);
-  }, [searchQuery]);
+    fetchBoards();
+  }, [fetchBoards]);
 
   const handleDragEnd = (result) => {
     if (!result.destination) return;
@@ -276,7 +274,7 @@ const KanbanBoard = () => {
 
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-2">
-          <h2 className="text-3xl font-senibold text-neutral-800">My Boards</h2>
+          <h2 className="text-3xl font-senibold text-neutral-800 px-2">My Boards</h2>
 
           <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
             <div className="relative flex-1 max-w-md p-2">
