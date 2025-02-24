@@ -31,74 +31,73 @@ router.post("/:boardId/upload", protect, uploadFile);
 router.post("/:boardId/pdf", protect, processPdf);
 router.get("/:boardId/export", protect, exportBoard);
 
-// // Element routes
-// router.post("/boards/:boardId/elements", protect, async (req, res) => {
-//   try {
-//     const element = await Element.create({
-//       ...req.body,
-//       board: req.params.boardId,
-//     });
-//     res.status(201).json(element);
-//   } catch (err) {
-//     res.status(400).json({ message: "Element creation failed" });
-//   }
-// });
-
-// // File upload route
-// router.post(
-//   "/boards/:boardId/upload",
-//   protect,
-//   upload.single("file"),
-//   async (req, res) => {
-//     try {
-//       const fileUrl = `/uploads/${req.file.filename}`;
-//       res.status(201).json({ url: fileUrl });
-//     } catch (err) {
-//       res.status(500).json({ message: "Upload failed" });
-//     }
-//   }
-// );
-
-// // PDF specific route
-// router.post(
-//   "/boards/:boardId/pdf",
-//   protect,
-//   upload.single("pdf"),
-//   async (req, res) => {
-//     try {
-//       const pdfUrl = `/uploads/${req.file.filename}`;
-//       res.status(201).json({ url: pdfUrl });
-//     } catch (err) {
-//       res.status(500).json({ message: "PDF upload failed" });
-//     }
-//   }
-// );
-
-// Upload endpoint
+// Image upload route
 router.post(
-  "/boards/:boardId/upload",
-  upload.single("file"), // Use multer middleware
+  "/:boardId/uploadImage",
+  protect,
+  upload.single("image"),
   async (req, res) => {
     try {
-      const fileUrl = `/uploads/${req.file.filename}`;
-      res.json({ url: fileUrl });
-    } catch (err) {
-      res.status(500).json({ error: "Upload failed" });
+      const board = await Board.findById(req.params.boardId);
+      if (!board) return res.status(404).json({ message: "Board not found" });
+
+      board.elements.push({
+        type: "image",
+        src: `/uploads/${req.file.filename}`,
+        position: { x: 0, y: 0 },
+      });
+
+      await board.save();
+      res.status(201).json(board);
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      res.status(500).json({ message: "Error uploading image" });
     }
   }
 );
 
-// Save endpoint
+// **Route for saving/updating board content (PUT)**
 router.put("/boards/:boardId", async (req, res) => {
+  const { boardId } = req.params;
+  const { content } = req.body; // Assuming content is sent in the request body
+
   try {
     const board = await Board.findByIdAndUpdate(
-      req.params.boardId,
-      { content: req.body.content },
+      boardId,
+      { content },
       { new: true }
-    );
-    res.json(board);
-  } catch (err) {
-    res.status(500).json({ error: "Save failed" });
+    ); // { new: true } to return the updated doc
+    if (!board) {
+      return res.status(404).json({ message: "Board not found" }); // Handle if boardId is invalid
+    }
+    res.json(board); // Return the updated board
+  } catch (error) {
+    console.error("Error updating board content:", error);
+    return res.status(500).json({ message: "Error saving board content" });
+  }
+});
+
+router.get("/search", async (req, res) => {
+  const { name } = req.query; // Get the 'name' query parameter
+
+  if (!name) {
+    // Basic validation - name is expected for search
+    return res
+      .status(400)
+      .json({ message: "Search 'name' parameter is required." });
+  }
+
+  try {
+    // **Potential Error Area:** Database query might fail if not handled properly.
+    const boards = await Board.find({
+      content: { $regex: name, $options: "i" }, // Search content, case-insensitive
+    });
+    res.json(boards);
+  } catch (error) {
+    console.error("Error during board search:", error); // Log the error on the server!
+    return res
+      .status(500)
+      .json({ message: "Error fetching boards during search." }); // Send a 500 error with a user-friendly message.
   }
 });
 

@@ -20,33 +20,6 @@ exports.getBoards = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Get single board
-// @route   GET /api/v1/boards/:boardId
-// @access  Private
-// exports.getBoard = async (req, res, next) => {
-//   try {
-//     const board = await Board.findById(req.params.id);
-
-//     if (!board) {
-//       return res.status(404).json({ message: "Board not found" });
-//     }
-
-//     // Ensure the board belongs to the logged-in user
-//     if (board.user.toString() !== req.user.boardId) {
-//       return res
-//         .status(403)
-//         .json({ message: "Not authorized to access this board" });
-//     }
-
-//     res.status(200).json({ success: true, data: board });
-//   } catch (err) {
-//     console.error("Error fetching board:", error);
-//     res
-//       .status(500)
-//       .json({ success: false, message: "Error fetching board", error: error });
-//   }
-// };
-
 // @desc    Get single board (SIMPLIFIED for DIAGNOSTIC TESTING)
 // @route   GET /api/v1/boards/:boardId
 // @access  Private
@@ -181,13 +154,13 @@ exports.toggleFavorite = asyncHandler(async (req, res) => {
 // @access  Private
 exports.updateBoard = async (req, res, next) => {
   try {
-    let board = await Board.findById(req.params.id);
+    let board = await Board.findById(req.params.boardId);
     if (!board) {
       return res.status(404).json({ message: "Board not found" });
     }
 
     // Update board properties (e.g., boardName, elements)
-    board = await Board.findByIdAndUpdate(req.params.id, req.body, {
+    board = await Board.findByIdAndUpdate(req.params.boardId, req.body, {
       new: true,
       runValidators: true,
     });
@@ -203,7 +176,7 @@ exports.updateBoard = async (req, res, next) => {
 // @access  Private
 exports.deleteBoard = async (req, res, next) => {
   try {
-    const board = await Board.findByIdAndDelete(req.params.id);
+    const board = await Board.findByIdAndDelete(req.params.boardId);
     if (!board) {
       return res.status(404).json({ message: "Board not found" });
     }

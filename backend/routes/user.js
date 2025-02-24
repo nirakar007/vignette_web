@@ -37,6 +37,7 @@ router.put(
   updateProfilePicture
 );
 
+
 // Admin routes
 router.get("/admin/users", protect, checkAdmin, adminGetUsers);
 router.put("/admin/users/:id", protect, checkAdmin, adminUpdateUser);
