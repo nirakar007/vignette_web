@@ -5,69 +5,78 @@ const morgan = require("morgan");
 const colors = require("colors");
 const connectDB = require("./config/db");
 const cookieParser = require("cookie-parser");
-const mongoSanitize = require("express-mongo-sanitize"); // for sql injection
+const mongoSanitize = require("express-mongo-sanitize");
 const helmet = require("helmet");
 const xss = require("xss-clean");
-const bodyParser = require("body-parser");
 const cors = require("cors");
+
+// Load environment variables
+dotenv.config({ path: "./config/config.env" });
+
+// Create Express app
 const app = express();
 
-app.use(cors());
-app.options("*", cors());
-
-// Load env file
-dotenv.config({
-  path: "./config/config.env",
-});
-
-// Connect to database
+// Connect to MongoDB
 connectDB();
 
-// Route files
-const auth = require("./routes/user");
-const board = require("./routes/board");
-
-// Body parser
-app.use(express.json());
-app.use(cookieParser());
-
-app.use(bodyParser.json({}));
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// Dev logging middleware
-if (process.env.NODE_ENV === "development") {
-  app.use(morgan("dev"));
-}
-
-// Sanitize data
-app.use(mongoSanitize());
-
-// Set security headers
-app.use(helmet());
-
-// Prevent XSS attacks
-app.use(xss());
-
-// Set static folder
-app.use(express.static(path.join(__dirname, "public")));
-// app.use(express.static('public'));
-
-// Mount routers
-app.use("/api/v1/auth", auth);
-app.use("/api/v1/board", board);
-
-const PORT = process.env.PORT || 5000;
-
-const server = app.listen(
-  PORT,
-  console.log(
-    `Server running in ${process.env.NODE_ENV} mode on port ${PORT}`.yellow.bold
-  )
+// Enhanced CORS configuration
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  })
 );
 
-// Handle unhandled promise rejections
+// Security middleware
+app.use(helmet());
+app.use(xss());
+app.use(mongoSanitize());
+
+// Body parsing
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+const userRoutes = require("./routes/user");
+const boardRoutes = require("./routes/board");
+const noteRoutes = require("./routes/note");
+
+app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
+
+// Mount routes (critical fix here)
+app.use("/api/v1/users", userRoutes); // Subscription endpoint lives here
+app.use("/api/v1/boards", boardRoutes);
+app.use("/api/v1/notes", noteRoutes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    success: false,
+    error: "Internal Server Error",
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 5000;
+const server = app.listen(PORT, () => {
+  console.log(
+    `
+  ██████╗  ██████╗ ████████╗███████╗
+  ██╔══██╗██╔═══██╗╚══██╔══╝██╔════╝
+  ██████╔╝██║   ██║   ██║   █████╗  
+  ██╔══██╗██║   ██║   ██║   ██╔══╝  
+  ██║  ██║╚██████╔╝   ██║   ███████╗
+  ╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚══════╝  
+  Mode: ${process.env.NODE_ENV.yellow}
+  Port: ${PORT.cyan}`.bold
+  );
+});
+
+// Handle unhandled rejections
 process.on("unhandledRejection", (err, promise) => {
   console.log(`Error: ${err.message}`.red);
-  // Close server & exit process
   server.close(() => process.exit(1));
 });

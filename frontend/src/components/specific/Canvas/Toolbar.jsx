@@ -1,5 +1,11 @@
 import axios from "axios";
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   FaDownload,
   FaFilePdf,
@@ -14,78 +20,93 @@ import { toast } from "react-toastify";
 import { AuthContext } from "../../../context/AuthContext";
 
 const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
-  const [position, setPosition] = useState({ x: 20, y: 20 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const dragStartPos = useRef({ x: 0, y: 0 });
-  const mediaRecorder = useRef(null);
   const { user } = useContext(AuthContext);
+  const [position, setPosition] = useState({ x: 20, y: 20 });
+  const isDragging = useRef(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const toolbarRef = useRef(null);
+  const mediaRecorder = useRef(null);
+  const [recording, setRecording] = useState(false);
 
-  // **Drag Handling**
+  // Configure axios instance
+  const api = axios.create({
+    baseURL: "http://localhost:5000/api/v1",
+    headers: {
+      Authorization: `Bearer ${user?.token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  // Drag handling
   const handleDragStart = (e) => {
-    setIsDragging(true);
+    isDragging.current = true;
     dragStartPos.current = {
       x: e.clientX - position.x,
       y: e.clientY - position.y,
     };
+
     document.addEventListener("mousemove", handleDragging);
     document.addEventListener("mouseup", handleDragEnd);
     e.preventDefault();
-    e.stopPropagation();
   };
 
-  const handleDragging = (e) => {
-    if (!isDragging) return;
+  const handleDragging = useCallback((e) => {
+    if (!isDragging.current) return;
+
     const newX = e.clientX - dragStartPos.current.x;
     const newY = e.clientY - dragStartPos.current.y;
+
+    // Immediate visual update
+    if (toolbarRef.current) {
+      toolbarRef.current.style.left = `${newX}px`;
+      toolbarRef.current.style.top = `${newY}px`;
+    }
+
     setPosition({
-      x: Math.max(0, Math.min(newX, window.innerWidth - 200)), // Prevent going off-screen
+      x: Math.max(0, Math.min(newX, window.innerWidth - 200)),
       y: Math.max(0, Math.min(newY, window.innerHeight - 300)),
     });
-  };
+  }, []);
 
-  const handleDragEnd = () => {
-    setIsDragging(false);
+  const handleDragEnd = useCallback(() => {
+    isDragging.current = false;
     document.removeEventListener("mousemove", handleDragging);
     document.removeEventListener("mouseup", handleDragEnd);
-  };
+  }, [handleDragging]);
 
-  // Cleanup event listeners on unmount
   useEffect(() => {
     return () => {
       document.removeEventListener("mousemove", handleDragging);
       document.removeEventListener("mouseup", handleDragEnd);
     };
-  }, []);
+  }, [handleDragging, handleDragEnd]);
 
-  // **Element Creation Handler**
+  // Element creation
   const createElement = async (type, data) => {
     try {
-      const res = await axios.post(
-        `/api/v1/boards/${boardId}/elements`,
-        { ...data, type },
-        {
-          headers: { Authorization: `Bearer ${user?.token}` },
-        }
-      );
+      const elementData = {
+        type,
+        ...data,
+        position: data.position || { x: 100, y: 100 },
+        size: data.size || { width: 200, height: 200 },
+        createdAt: new Date().toISOString(),
+      };
+
+      const res = await api.post(`/boards/${boardId}/elements`, elementData);
+
+      if (!res.data?._id) {
+        throw new Error("Invalid element response");
+      }
+
       onAddElement(res.data);
-      toast.success(`${type} added successfully`);
+      return res.data;
     } catch (err) {
-      toast.error(`Failed to add ${type}`);
       console.error(`Error creating ${type}:`, err);
+      throw err;
     }
   };
 
-  // **Text Element**
-  const handleText = () =>
-    createElement("text", {
-      content: "New Text",
-      position: { x: 100, y: 100 },
-      style: { fontSize: 16, color: "#000" },
-      size: { width: 200, height: 50 },
-    });
-
-  // **Image Upload**
+  // Image upload
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -94,29 +115,29 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
     formData.append("file", file);
 
     try {
-      const uploadRes = await axios.post(
-        `/api/v1/boards/${boardId}/upload`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${user?.token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-      const fileUrl = uploadRes.data.url;
+      toast.info("Uploading image...", { autoClose: false });
+      const uploadRes = await api.post(`/boards/${boardId}/upload`, formData);
+
       await createElement("image", {
-        src: fileUrl,
-        position: { x: 100, y: 100 },
-        size: { width: 200, height: 200 },
+        src: uploadRes.data.url,
+        meta: {
+          originalName: file.name,
+          size: file.size,
+          type: file.type,
+        },
       });
+      toast.success("Image uploaded successfully");
     } catch (err) {
-      toast.error("Failed to upload image");
-      console.error("Image upload error:", err);
+      toast.error(
+        `Upload failed: ${err.response?.data?.message || err.message}`
+      );
+    } finally {
+      e.target.value = null;
+      toast.dismiss();
     }
   };
 
-  // **PDF Upload**
+  // PDF upload
   const handlePDFUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -125,30 +146,33 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
     formData.append("pdf", file);
 
     try {
-      const res = await axios.post(`/api/v1/boards/${boardId}/pdf`, formData, {
-        headers: {
-          Authorization: `Bearer ${user?.token}`,
-          "Content-Type": "multipart/form-data",
-        },
+      toast.info("Uploading PDF...", { autoClose: false });
+      const res = await api.post(`/boards/${boardId}/pdf`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      onAddElement(res.data);
+
+      await createElement("pdf", {
+        url: res.data.url,
+        meta: { fileName: file.name },
+      });
       toast.success("PDF uploaded successfully");
     } catch (err) {
       toast.error("Failed to upload PDF");
       console.error("PDF upload error:", err);
+    } finally {
+      e.target.value = null;
+      toast.dismiss();
     }
   };
 
-  // **Sticker Elements**
+  // Sticker creation
   const createSticker = (shape) =>
     createElement("sticker", {
       shape,
-      position: { x: 100, y: 100 },
-      size: { width: 100, height: 100 },
       color: "#FFD700",
     });
 
-  // **Voice Memo**
+  // Voice recording
   const toggleRecording = async () => {
     if (recording) {
       mediaRecorder.current?.stop();
@@ -159,7 +183,7 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
           audio: true,
         });
         mediaRecorder.current = new MediaRecorder(stream, {
-          mimeType: "audio/ogg; codecs=opus", // Lightweight format
+          mimeType: "audio/ogg; codecs=opus",
         });
         mediaRecorder.current.start();
 
@@ -167,28 +191,18 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
           const audioFile = new File([e.data], "recording.ogg", {
             type: "audio/ogg; codecs=opus",
           });
+
           const formData = new FormData();
           formData.append("file", audioFile);
 
           try {
-            const uploadRes = await axios.post(
-              `/api/v1/boards/${boardId}/upload`,
-              formData,
-              {
-                headers: {
-                  Authorization: `Bearer ${user?.token}`,
-                  "Content-Type": "multipart/form-data",
-                },
-              }
+            const uploadRes = await api.post(
+              `/boards/${boardId}/upload`,
+              formData
             );
-            const fileUrl = uploadRes.data.url;
-            await createElement("audio", {
-              src: fileUrl,
-              position: { x: 100, y: 100 },
-            });
+            await createElement("audio", { src: uploadRes.data.url });
           } catch (err) {
             toast.error("Failed to upload audio");
-            console.error("Audio upload error:", err);
           }
         };
 
@@ -198,16 +212,14 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
         setRecording(true);
       } catch (err) {
         toast.error("Microphone access required");
-        console.error("Recording error:", err);
       }
     }
   };
 
-  // **PDF Export**
+  // PDF export
   const handleExportPDF = async () => {
     try {
-      const res = await axios.get(`/api/v1/boards/${boardId}/export`, {
-        headers: { Authorization: `Bearer ${user?.token}` },
+      const res = await api.get(`/boards/${boardId}/export`, {
         responseType: "blob",
       });
 
@@ -218,32 +230,29 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-
       toast.success("PDF exported successfully");
     } catch (err) {
       toast.error("Failed to export PDF");
-      console.error("Export error:", err);
     }
   };
 
   return (
     <div
-      className={`fixed bg-white/90 backdrop-blur-lg rounded-xl p-4 shadow-xl border border-gray-300/50 transition-all duration-200 hover:shadow-2xl`}
+      ref={toolbarRef}
+      className="fixed bg-white/90 backdrop-blur-lg rounded-xl p-4 shadow-xl border border-gray-300/50 cursor-grab active:cursor-grabbing select-none touch-none"
       style={{ left: position.x, top: position.y }}
+      onMouseDown={handleDragStart}
     >
       <div className="flex items-center mb-3 pb-2 border-b border-gray-200">
-        <div className="cursor-grab" onMouseDown={handleDragStart}>
-          <FaGripVertical className="text-gray-400 mr-2" />
-        </div>
+        <FaGripVertical className="text-gray-400 mr-2" />
         <h3 className="text-sm font-semibold text-gray-600">Tools</h3>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {/* Content Section */}
         <div className="space-y-3">
           <ToolbarButton
             icon={<FaTextHeight />}
-            onClick={handleText}
+            onClick={() => createElement("text", { content: "New Text" })}
             tooltip="Add Text"
           />
           <ToolbarButton
@@ -272,7 +281,6 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
           />
         </div>
 
-        {/* Media Section */}
         <div className="space-y-3">
           <ToolbarButton
             icon={<FaStickyNote />}
@@ -299,7 +307,6 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
         </div>
       </div>
 
-      {/* Export Section */}
       <div className="mt-4 pt-3 border-t border-gray-200">
         <ToolbarButton
           icon={<FaDownload />}

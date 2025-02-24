@@ -64,6 +64,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Add token refresh mechanism
+  const refreshToken = async () => {
+    try {
+      const response = await axios.post("/api/v1/auth/refresh-token", {
+        refreshToken: localStorage.getItem("refreshToken"),
+      });
+
+      localStorage.setItem("token", response.data.accessToken);
+      localStorage.setItem("refreshToken", response.data.refreshToken);
+
+      return response.data.accessToken;
+    } catch (error) {
+      localStorage.clear();
+      window.location.href = "/sign-in";
+      return null;
+    }
+  };
+
   return (
     <AuthContext.Provider value={{ user, login, logout, loading }}>
       {children}
