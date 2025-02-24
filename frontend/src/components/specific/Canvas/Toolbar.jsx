@@ -13,7 +13,6 @@ import {
   FaImage,
   FaMicrophone,
   FaPen,
-  FaStickyNote,
   FaTextHeight,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
@@ -112,11 +111,16 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
     if (!file) return;
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("image", file); // Corrected field name to "image"
 
     try {
       toast.info("Uploading image...", { autoClose: false });
-      const uploadRes = await api.post(`/boards/${boardId}/upload`, formData);
+      const token = user?.token || localStorage.getItem("token"); // Get the token again to be sure
+      console.log("Token being sent:", token); // <---- ADD THIS LINE to log the token
+      const uploadRes = await api.post(
+        `/boards/${boardId}/uploadImage`,
+        formData
+      );
 
       await createElement("image", {
         src: uploadRes.data.url,
@@ -282,16 +286,6 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
         </div>
 
         <div className="space-y-3">
-          <ToolbarButton
-            icon={<FaStickyNote />}
-            onClick={() => createSticker("circle")}
-            tooltip="Circle Sticker"
-          />
-          <ToolbarButton
-            icon={<FaStickyNote className="rotate-45" />}
-            onClick={() => createSticker("square")}
-            tooltip="Square Sticker"
-          />
           <ToolbarButton
             icon={<FaMicrophone />}
             onClick={toggleRecording}

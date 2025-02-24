@@ -7,8 +7,6 @@ import { useNavigate } from "react-router-dom";
 import KanbanBoard from "../../components/specific/KanbanBoardUI";
 import { AuthContext } from "../../context/AuthContext"; // Import AuthContext
 
-// Create a context for notebook actions
-const NotebookContext = createContext();
 
 const Dashboard = () => {
   const [name, setName] = useState("");
