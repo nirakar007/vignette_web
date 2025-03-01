@@ -29,6 +29,7 @@ const userSchema = new mongoose.Schema({
     trim: true,
     unique: true, // Prevent duplicate usernames
   },
+
   email: {
     type: String,
     required: true,
