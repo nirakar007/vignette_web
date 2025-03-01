@@ -1,6 +1,8 @@
 const asyncHandler = require("../middleware/async");
 const Board = require("../models/board");
 const User = require("../models/user");
+const ErrorResponse = require("../utils/errorResponse");
+const PDFDocument = require("pdfkit");
 
 // @desc    Get all boards
 // @route   GET /api/v1/boards
@@ -38,10 +40,17 @@ exports.getBoard = async (req, res, next) => {
 
     // Ensure elements array exists
     board.elements = board.elements || [];
+    // Ensure elements have `src`
+    const elements = board.elements.map((element) => {
+      if (element.type === "image" && !element.src) {
+        element.src = `http://localhost:5000/uploads/${element._id}.jpg`; // Adjust if necessary
+      }
+      return element;
+    });
 
     res.status(200).json({
       success: true,
-      data: board,
+      data: { ...board.toObject(), elements },
     });
   } catch (err) {
     console.error("Error fetching board:", err);
@@ -152,31 +161,49 @@ exports.toggleFavorite = asyncHandler(async (req, res) => {
 // @desc    Update board (including adding/updating elements)
 // @route   PUT /api/v1/boards/:id
 // @access  Private
-exports.updateBoard = async (req, res, next) => {
+// In controllers/board.js
+exports.updateBoard = asyncHandler(async (req, res) => {
+  // Validate input
+  if (!req.body.content) {
+    return res.status(400).json({
+      success: false,
+      message: "Content is required",
+    });
+  }
+
   try {
-    let board = await Board.findById(req.params.boardId);
+    const board = await Board.findByIdAndUpdate(
+      req.params.boardId,
+      { content: req.body.content },
+      { new: true, runValidators: true }
+    );
+
     if (!board) {
-      return res.status(404).json({ message: "Board not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Board not found",
+      });
     }
 
-    // Update board properties (e.g., boardName, elements)
-    board = await Board.findByIdAndUpdate(req.params.boardId, req.body, {
-      new: true,
-      runValidators: true,
+    res.status(200).json({
+      success: true,
+      data: board,
     });
-
-    res.status(200).json({ success: true, data: board });
   } catch (err) {
-    next(err);
+    console.error("Update error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error during save",
+    });
   }
-};
+});
 
 // @desc    Delete board
 // @route   DELETE /api/v1/boards/:id
 // @access  Private
 exports.deleteBoard = async (req, res, next) => {
   try {
-    const board = await Board.findByIdAndDelete(req.params.boardId);
+    const board = await Board.findByIdAndDelete(req.params.id);
     if (!board) {
       return res.status(404).json({ message: "Board not found" });
     }
@@ -207,90 +234,153 @@ exports.searchBoards = asyncHandler(async (req, res) => {
   }
 });
 
-// @desc    Add an element to a board
-// @route   POST /api/v1/boards/:boardId/elements
-// @access  Private (Requires authentication)
-exports.addElementToBoard = asyncHandler(async (req, res, next) => {
-  const boardId = req.params.boardId; // Get boardId from URL parameters
-  const { type, content, position, size } = req.body; // Element data from request body
-
-  if (!boardId) {
-    return next(
-      new ErrorResponse(`Board ID is required`, 400) // Or use res.status(400).json(...)
-    );
-  }
-
-  if (!type || !content) {
-    // Basic validation for type and content
-    return next(
-      new ErrorResponse(`Element type and content are required`, 400)
-    );
-  }
-
+// controllers/board.js
+exports.uploadImageToBoard = asyncHandler(async (req, res) => {
   try {
-    const board = await Board.findById(boardId);
-
+    console.log("Uploading image for board:", req.params.boardId);
+    const board = await Board.findById(req.params.boardId);
     if (!board) {
-      return next(
-        new ErrorResponse(`Board not found with ID: ${boardId}`, 404)
-      );
+      console.log("Board not found");
+      return res
+        .status(404)
+        .json({ success: false, message: "Board not found" });
     }
 
-    // Create a new element object
-    const newElement = {
-      type,
-      content,
-      position: position || { x: 0, y: 0 }, // Default position if not provided
-      size: size || { width: 100, height: 100 }, // Default size if not provided
-      // You can add more element properties here as needed
-    };
+    if (!req.file) {
+      console.log("No file uploaded");
+      return res
+        .status(400)
+        .json({ success: false, message: "No image file uploaded" });
+    }
 
-    // Push the new element into the board's elements array
-    board.elements.push(newElement);
-    await board.save(); // Save the updated board
+    console.log("File uploaded:", req.file);
+    const imageUrl = `uploads/${req.file.filename}`;
+    console.log("Image URL:", imageUrl);
+
+    const newImage = {
+      type: "image",
+      content: imageUrl, // Use 'content' as per your schema (not 'src')
+      position: { x: 0, y: 0 },
+      size: { width: req.body.width || 300, height: req.body.height || 200 },
+    };
+    console.log("New image element:", newImage);
+
+    board.elements.push(newImage);
+    await board.save();
+    console.log("Board saved successfully");
 
     res.status(201).json({
       success: true,
-      data: board, // Or you can send back just the new element if you prefer
-      message: "Element added to board successfully",
+      imageUrl,
+      data: newImage,
+      message: "Image uploaded to board successfully",
     });
   } catch (error) {
-    console.error("Error adding element to board:", error);
-    return next(new ErrorResponse("Server error adding element", 500)); // Handle server errors
+    console.error("Error uploading image:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error during image upload",
+      error: error.message,
+    });
   }
 });
+
+// Fetch all images for a board
+exports.getBoardImages = asyncHandler(async (req, res) => {
+  try {
+    const board = await Board.findById(req.params.boardId);
+
+    if (!board) {
+      return res.status(404).json({
+        success: false,
+        message: "Board not found",
+      });
+    }
+
+    const images = board.elements.filter((el) => el.type === "image");
+
+    res.status(200).json({
+      success: true,
+      images, // Ensure the response contains a valid `images` array
+    });
+  } catch (error) {
+    console.error("Error fetching images:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching images",
+      error: error.message,
+    });
+  }
+});
+
+// Delete an image
+exports.deleteImage = async (req, res) => {
+  try {
+    const { boardId, imageId } = req.params;
+    const board = await Board.findById(boardId);
+    if (!board) return res.status(404).json({ message: "Board not found" });
+
+    // Find image element
+    const imageIndex = board.elements.findIndex(
+      (el) => el._id.toString() === imageId && el.type === "image"
+    );
+    if (imageIndex === -1)
+      return res.status(404).json({ message: "Image not found" });
+
+    const imagePath = board.elements[imageIndex].src;
+
+    // Remove from database
+    board.elements.splice(imageIndex, 1);
+    await board.save();
+
+    // Optionally, delete file from server
+    const filePath = path.join(
+      __dirname,
+      "..",
+      "uploads",
+      path.basename(imagePath)
+    );
+    fs.unlink(filePath, (err) => {
+      if (err) console.warn("Failed to delete file:", err);
+    });
+
+    res.status(200).json({ message: "Image deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting image:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 // @desc    Add or update an element on the board
 // @route   PUT /api/v1/boards/:id/elements
 // @access  Private
-exports.updateElement = async (req, res, next) => {
-  try {
-    const board = await Board.findById(req.params.id);
-    if (!board) {
-      return res.status(404).json({ message: "Board not found" });
-    }
+exports.updateElement = asyncHandler(async (req, res) => {
+  const { boardId, elementId } = req.params;
+  const { content } = req.body;
 
-    const { element } = req.body;
-
-    // Check if the element already exists
-    const elementIndex = board.elements.findIndex(
-      (el) => el._id === element._id
-    );
-
-    if (elementIndex !== -1) {
-      // Update existing element
-      board.elements[elementIndex] = element;
-    } else {
-      // Add new element
-      board.elements.push(element);
-    }
-
-    await board.save();
-    res.status(200).json({ success: true, data: board });
-  } catch (err) {
-    next(err);
+  const board = await Board.findById(boardId);
+  if (!board) {
+    return res.status(404).json({ success: false, message: "Board not found" });
   }
-};
+
+  const elementIndex = board.elements.findIndex(
+    (el) => el._id.toString() === elementId
+  );
+  if (elementIndex === -1) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Element not found" });
+  }
+
+  board.elements[elementIndex].content = content;
+  await board.save();
+
+  res.status(200).json({
+    success: true,
+    data: board.elements[elementIndex],
+    message: "Element updated successfully",
+  });
+});
 
 // @desc    Delete an element from the board
 // @route   DELETE /api/v1/boards/:id/elements/:elementId
@@ -435,37 +525,31 @@ exports.processPdf = asyncHandler(async (req, res, next) => {
 // @desc    Export board as PDF
 // @route   GET /api/v1/boards/:boardId/export
 // @access  Private
-exports.exportBoard = asyncHandler(async (req, res, next) => {
-  const boardId = req.params.boardId;
-  const board = await Board.findById(boardId);
-
+exports.exportBoard = asyncHandler(async (req, res) => {
+  const board = await Board.findById(req.params.boardId);
   if (!board) {
-    return next(new ErrorResponse(`Board not found with ID: ${boardId}`, 404));
+    return res.status(404).json({ success: false, message: "Board not found" });
   }
 
   const doc = new PDFDocument();
-  let buffers = [];
-  doc.on("data", buffers.push.bind(buffers));
-  doc.on("end", () => {
-    const pdfBuffer = Buffer.concat(buffers);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="board-${boardId}.pdf"`
-    );
-    res.send(pdfBuffer);
-  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${board.boardName}.pdf"`
+  );
+  doc.pipe(res);
 
-  // Add board elements to PDF
   board.elements.forEach((element) => {
-    if (element.type === "text") {
+    if (element.type === "text" && element.content) {
       doc.text(element.content, element.position.x, element.position.y);
-    } else if (element.type === "image" && element.src) {
-      const imagePath = path.join(__dirname, "../public", element.src);
-      doc.image(imagePath, element.position.x, element.position.y, {
-        width: element.size.width,
-        height: element.size.height,
-      });
+    } else if (element.type === "image" && element.content) {
+      const imagePath = path.join(__dirname, "../public", element.content);
+      if (fs.existsSync(imagePath)) {
+        doc.image(imagePath, element.position.x, element.position.y, {
+          width: element.size.width,
+          height: element.size.height,
+        });
+      }
     }
   });
 
