@@ -129,27 +129,46 @@ const KanbanBoard = () => {
     const token = localStorage.getItem("token");
 
     if (!token) {
-      console.error("No token found, please log in.");
+      Swal.fire(
+        "Authentication Required",
+        "Please log in to perform this action.",
+        "warning"
+      );
       return;
     }
 
-    const confirmDelete = await Swal.fire({
-      title: "Are you sure?",
-      text: "This will permanently delete the board!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Yes, delete it!",
-      cancelButtonText: "Cancel",
-    });
-
-    if (!confirmDelete.isConfirmed) return;
-
     try {
-      await axios.delete(`http://localhost:5000/api/v1/boards/${boardId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const confirmDelete = await Swal.fire({
+        title: "Are you sure?",
+        text: "This will permanently delete the board!",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, delete it!",
+        cancelButtonText: "Cancel",
       });
 
-      setBoards(boards.filter((board) => board._id !== boardId));
+      if (!confirmDelete.isConfirmed) return;
+
+      const response = await axios.delete(
+        `http://localhost:5000/api/v1/boards/${boardId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          validateStatus: (status) => status < 500,
+        }
+      );
+
+      if (response.status === 404) {
+        throw new Error("Board not found on server - possibly already deleted");
+      }
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || "Failed to delete board");
+      }
+
+      setBoards((prev) => prev.filter((board) => board._id !== boardId));
 
       Swal.fire({
         title: "Deleted!",
@@ -158,7 +177,15 @@ const KanbanBoard = () => {
         confirmButtonText: "OK",
       });
     } catch (error) {
-      console.error("Error deleting board:", error.response?.data || error);
+      console.error("Delete Error:", error);
+      Swal.fire({
+        title: "Deletion Failed",
+        text:
+          error.response?.data?.message ||
+          error.message ||
+          "Could not delete board",
+        icon: "error",
+      });
     }
   };
 
@@ -274,7 +301,9 @@ const KanbanBoard = () => {
 
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-2">
-          <h2 className="text-3xl font-senibold text-neutral-800 px-2">My Boards</h2>
+          <h2 className="text-3xl font-senibold text-neutral-800 px-2">
+            My Boards
+          </h2>
 
           <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
             <div className="relative flex-1 max-w-md p-2">
