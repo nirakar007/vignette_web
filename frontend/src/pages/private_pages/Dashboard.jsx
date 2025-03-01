@@ -1,6 +1,6 @@
 import axios from "axios";
 import { motion } from "framer-motion";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { FaUserCircle } from "react-icons/fa";
 import { MdLogout, MdNotes } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
@@ -151,7 +151,7 @@ const Dashboard = () => {
 
           {/* Right Panel */}
           <motion.div
-            className="bg-neutral-900 text-white flex flex-col justify-center items-center p-6 md:w-1/4"
+            className="bg-neutral-900 text-white flex flex-col justify-start items-center p-6 md:w-1/4 h-[600px] rounded-lg drop-shadow-lg"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
