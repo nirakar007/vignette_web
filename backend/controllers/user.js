@@ -241,6 +241,7 @@ exports.uploadImage = uploadImage; // Correct export
 // @access Private
 // In controllers/user.js
 exports.updateProfilePicture = asyncHandler(async (req, res) => {
+  console.log(req.body);
   if (!req.file) {
     return res.status(400).json({ success: false, error: "No file uploaded" });
   }
