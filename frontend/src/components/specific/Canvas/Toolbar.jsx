@@ -8,35 +8,30 @@ import React, {
 } from "react";
 import {
   FaDownload,
-  FaFilePdf,
+  FaFileExport,
   FaGripVertical,
   FaImage,
-  FaMicrophone,
-  FaPen,
   FaTextHeight,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { AuthContext } from "../../../context/AuthContext";
 
-const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
+const Toolbar = ({ boardId, onAddElement }) => {
   const { user } = useContext(AuthContext);
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const isDragging = useRef(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const toolbarRef = useRef(null);
-  const mediaRecorder = useRef(null);
-  const [recording, setRecording] = useState(false);
 
   // Configure axios instance
   const api = axios.create({
-    baseURL: "http://localhost:5000/api/v1",
+    baseURL: "http://localhost:5000/api/v1/",
     headers: {
-      Authorization: `Bearer ${user?.token}`,
-      "Content-Type": "application/json",
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
     },
   });
 
-  // Drag handling
+  // Drag handling for the toolbar
   const handleDragStart = (e) => {
     isDragging.current = true;
     dragStartPos.current = {
@@ -51,11 +46,9 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
 
   const handleDragging = useCallback((e) => {
     if (!isDragging.current) return;
-
     const newX = e.clientX - dragStartPos.current.x;
     const newY = e.clientY - dragStartPos.current.y;
 
-    // Immediate visual update
     if (toolbarRef.current) {
       toolbarRef.current.style.left = `${newX}px`;
       toolbarRef.current.style.top = `${newY}px`;
@@ -80,7 +73,7 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
     };
   }, [handleDragging, handleDragEnd]);
 
-  // Element creation
+  // Create new element (e.g., image, text)
   const createElement = async (type, data) => {
     try {
       const elementData = {
@@ -91,152 +84,106 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
         createdAt: new Date().toISOString(),
       };
 
+      // POST to create the element
       const res = await api.post(`/boards/${boardId}/elements`, elementData);
 
-      if (!res.data?._id) {
+      // Check for the element ID on the proper response path
+      if (!res.data || !res.data.data || !res.data.data._id) {
         throw new Error("Invalid element response");
       }
 
-      onAddElement(res.data);
-      return res.data;
+      // Add the element to the canvas (or update state)
+      onAddElement(res.data.data);
+      return res.data.data;
     } catch (err) {
       console.error(`Error creating ${type}:`, err);
       throw err;
     }
   };
 
-  // Image upload
+  // Image upload handling
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file) {
+      toast.error("No file selected");
+      return;
+    }
 
     const formData = new FormData();
-    formData.append("image", file); // Corrected field name to "image"
+    formData.append("image", file);
+    await axios.post(`/api/v1/boards/${boardId}/upload`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
 
     try {
       toast.info("Uploading image...", { autoClose: false });
-      const token = user?.token || localStorage.getItem("token"); // Get the token again to be sure
-      console.log("Token being sent:", token); // <---- ADD THIS LINE to log the token
-      const uploadRes = await api.post(
-        `/boards/${boardId}/uploadImage`,
-        formData
-      );
 
+      const uploadRes = await api.post(`boards/${boardId}/upload`, formData, {
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      console.log("Upload Response:", uploadRes.data); // Debugging
+
+      if (!uploadRes.data || !uploadRes.data.data?.src) {
+        throw new Error("Image upload failed. No URL received.");
+      }
+
+      // Create a new image element on the board with the uploaded URL.
       await createElement("image", {
-        src: uploadRes.data.url,
+        src: uploadRes.data.data.src, // Ensure correct field
         meta: {
           originalName: file.name,
           size: file.size,
           type: file.type,
         },
       });
+
       toast.success("Image uploaded successfully");
     } catch (err) {
       toast.error(
         `Upload failed: ${err.response?.data?.message || err.message}`
       );
+      console.error("Image upload error:", err);
     } finally {
       e.target.value = null;
       toast.dismiss();
     }
   };
 
-  // PDF upload
-  const handlePDFUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("pdf", file);
-
+  // --- New: Handle board export ---
+  const handleExport = async () => {
     try {
-      toast.info("Uploading PDF...", { autoClose: false });
-      const res = await api.post(`/boards/${boardId}/pdf`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      await createElement("pdf", {
-        url: res.data.url,
-        meta: { fileName: file.name },
-      });
-      toast.success("PDF uploaded successfully");
-    } catch (err) {
-      toast.error("Failed to upload PDF");
-      console.error("PDF upload error:", err);
-    } finally {
-      e.target.value = null;
-      toast.dismiss();
-    }
-  };
-
-  // Sticker creation
-  const createSticker = (shape) =>
-    createElement("sticker", {
-      shape,
-      color: "#FFD700",
-    });
-
-  // Voice recording
-  const toggleRecording = async () => {
-    if (recording) {
-      mediaRecorder.current?.stop();
-      setRecording(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-        mediaRecorder.current = new MediaRecorder(stream, {
-          mimeType: "audio/ogg; codecs=opus",
-        });
-        mediaRecorder.current.start();
-
-        mediaRecorder.current.ondataavailable = async (e) => {
-          const audioFile = new File([e.data], "recording.ogg", {
-            type: "audio/ogg; codecs=opus",
-          });
-
-          const formData = new FormData();
-          formData.append("file", audioFile);
-
-          try {
-            const uploadRes = await api.post(
-              `/boards/${boardId}/upload`,
-              formData
-            );
-            await createElement("audio", { src: uploadRes.data.url });
-          } catch (err) {
-            toast.error("Failed to upload audio");
-          }
-        };
-
-        mediaRecorder.current.onstop = () => {
-          stream.getTracks().forEach((track) => track.stop());
-        };
-        setRecording(true);
-      } catch (err) {
-        toast.error("Microphone access required");
-      }
-    }
-  };
-
-  // PDF export
-  const handleExportPDF = async () => {
-    try {
-      const res = await api.get(`/boards/${boardId}/export`, {
+      toast.info("Exporting board...", { autoClose: false });
+      // GET request to export board. Set responseType to blob for file download.
+      const response = await api.get(`boards/${boardId}/export`, {
         responseType: "blob",
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+        },
       });
-
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+      // Create a URL for the blob object
+      const blob = new Blob([response.data], {
+        type: response.headers["content-type"],
+      });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
+      // Set a default file name; adjust as needed
       link.setAttribute("download", `board-${boardId}.pdf`);
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      toast.success("PDF exported successfully");
-    } catch (err) {
-      toast.error("Failed to export PDF");
+      document.body.removeChild(link);
+      toast.success("Board exported successfully");
+    } catch (error) {
+      toast.error(
+        `Export failed: ${error.response?.data?.message || error.message}`
+      );
+      console.error("Export board error:", error);
+    } finally {
+      toast.dismiss();
     }
   };
 
@@ -248,17 +195,22 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
       onMouseDown={handleDragStart}
     >
       <div className="flex items-center mb-3 pb-2 border-b border-gray-200">
+        <div className="-mt-5 mx-2">
+          <img src="/src/assets/logo/logo.svg" alt="Logo" className="h-8 w-9" />
+        </div>
         <FaGripVertical className="text-gray-400 mr-2" />
         <h3 className="text-sm font-semibold text-gray-600">Tools</h3>
       </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-3">
+      <div className="flex flex-col items-center">
+        <div className="space-y-2">
+          {/* Button to add text element */}
           <ToolbarButton
             icon={<FaTextHeight />}
             onClick={() => createElement("text", { content: "New Text" })}
             tooltip="Add Text"
           />
+
+          {/* Button to trigger image upload */}
           <ToolbarButton
             icon={<FaImage />}
             onClick={() => document.getElementById("image-upload").click()}
@@ -271,41 +223,24 @@ const Toolbar = ({ boardId, onAddElement, drawingMode, setDrawingMode }) => {
             accept="image/*"
             onChange={handleImageUpload}
           />
-          <ToolbarButton
-            icon={<FaFilePdf />}
-            onClick={() => document.getElementById("pdf-upload").click()}
-            tooltip="Add PDF"
-          />
-          <input
-            type="file"
-            id="pdf-upload"
-            hidden
-            accept="application/pdf"
-            onChange={handlePDFUpload}
-          />
-        </div>
 
-        <div className="space-y-3">
-          <ToolbarButton
-            icon={<FaMicrophone />}
-            onClick={toggleRecording}
-            tooltip={recording ? "Stop Recording" : "Record Voice Memo"}
-            active={recording}
-          />
-          <ToolbarButton
-            icon={<FaPen />}
-            onClick={() => setDrawingMode(!drawingMode)}
-            tooltip={drawingMode ? "Exit Drawing" : "Start Drawing"}
-            active={drawingMode}
-          />
+          {/* Additional buttons can be added similarly */}
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-gray-200">
+      <div className="flex mt-4 pt-3 border-t space-x-2 border-gray-200">
+        {/* Export Board Button */}
+        <ToolbarButton
+          icon={<FaFileExport />}
+          onClick={handleExport}
+          tooltip="Export Board as PDF"
+          className="w-full justify-center bg-blue-50 hover:bg-blue-100 text-blue-600"
+        />
+        {/* Save Board Button */}
         <ToolbarButton
           icon={<FaDownload />}
-          onClick={handleExportPDF}
-          tooltip="Export Board as PDF"
+          onClick={() => console.log("Save board")}
+          tooltip="Save Board"
           className="w-full justify-center bg-blue-50 hover:bg-blue-100 text-blue-600"
         />
       </div>
