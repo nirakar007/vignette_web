@@ -1,108 +1,118 @@
 import axios from "axios";
 import React, { useContext, useEffect, useRef, useState } from "react";
+import Draggable from "react-draggable";
 import toast from "react-hot-toast";
 import { useParams } from "react-router-dom";
 import { AuthContext } from "../../../context/AuthContext";
 import Toolbar from "./Toolbar";
+import { useLocation } from "react-router-dom";
 
 const Canvas = () => {
   const { boardId } = useParams();
+  const location = useLocation();
   const { user } = useContext(AuthContext);
   const [elements, setElements] = useState([]);
+  // const [boardName, setBoardName] = useState("");
   const boardRef = useRef(null);
   const [content, setContent] = useState("");
 
-  // Load board data on mount
+  // // Load board and elements
+  // useEffect(() => {
+  //   const loadBoard = async () => {
+  //     try {
+  //       const url = `http://localhost:5000/api/v1/boards/${boardId}`;
+  //       const res = await axios.get(url, {
+  //         headers: { Authorization: `Bearer ${user?.token}` },
+  //       });
+  //       if (res.data.success) {
+  //         const board = res.data.data;
+  //         setElements(res.data.elements || []);
+  //         // setBoardName(location.state?.boardName);
+
+  //         // Initialize text content
+  //         const textElement = board.elements.find((el) => el.type === "text");
+  //         if (textElement && boardRef.current) {
+  //           boardRef.current.innerHTML = textElement.content;
+  //           setContent(textElement.content);
+  //         }
+  //       }
+  //     } catch (error) {
+  //       console.error("Error loading board:", error);
+  //     }
+  //   };
+  //   loadBoard();
+  // }, [boardId, user?.token]);
   useEffect(() => {
     const loadBoard = async () => {
       try {
-        const res = await axios.get(`/api/v1/boards/${boardId}`, {
+        const url = `http://localhost:5000/api/v1/boards/${boardId}`;
+        const res = await axios.get(url, {
           headers: { Authorization: `Bearer ${user?.token}` },
         });
-        if (res.data.success && res.data.data) {
-          const board = res.data.data;
-          setElements(board.elements || []);
-          const textElement = board.elements.find((el) => el.type === "text");
-          if (textElement && boardRef.current) {
-            boardRef.current.innerHTML = textElement.content;
-            setContent(textElement.content);
+
+        if (res.data.success) {
+          const board = res.data.board;
+
+          // Fix image URLs inside content
+          // let updatedContent = board.content.replace(
+          //   /src="\/uploads\//g,
+          //   'src="http://localhost:5000/uploads/'
+          // );
+
+          // Set text content from elements
+          if (board.elements) {
+            setContent(board.elements.replace(/&nbsp;/g, " "));
+            if (boardRef.current) boardRef.current.innerText = cleanText; // Replace &nbsp; with space
           }
         }
       } catch (error) {
         console.error("Error loading board:", error);
       }
     };
+
     loadBoard();
   }, [boardId, user?.token]);
 
-  // Fetch images when board loads
+  // Autosave text content
   useEffect(() => {
-    const loadImages = async () => {
-      if (!boardId || !user?.token) return;
+    const autosave = async () => {
+      const htmlContent = boardRef.current?.innerHTML;
+      if (!htmlContent || htmlContent === content) return;
 
       try {
-        const res = await axios.get(`/api/v1/boards/${boardId}/images`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        });
-
-        if (!res.data || !res.data.images || !res.data.success) {
-          throw new Error("Invalid image data received");
-        }
-
-        // Merge existing elements with new images
-        setElements((prevElements) => [...prevElements, ...res.data.images]);
-      } catch (error) {
-        console.error("Error fetching images:", error);
-        toast.error("Failed to load images");
-      }
-    };
-
-    loadImages();
-  }, [boardId, user?.token]);
-
-  useEffect(() => {
-    const saveContent = async () => {
-      try {
-        const updatedContent = boardRef.current.innerHTML;
         const textElement = elements.find((el) => el.type === "text");
-
         if (textElement) {
-          // Update existing text element
           await axios.put(
             `/api/v1/boards/${boardId}/elements/${textElement._id}`,
-            { content: updatedContent },
+            { content: htmlContent },
             { headers: { Authorization: `Bearer ${user?.token}` } }
           );
         } else {
-          // Create new text element
-          const newElement = {
-            type: "text",
-            content: updatedContent,
-            position: { x: 0, y: 0 },
-            size: { width: 800, height: 600 },
-          };
           const res = await axios.post(
             `/api/v1/boards/${boardId}/elements`,
-            newElement,
+            {
+              type: "text",
+              content: htmlContent,
+              position: { x: 0, y: 0 },
+            },
             { headers: { Authorization: `Bearer ${user?.token}` } }
           );
-          setElements([...elements, res.data.data]); // Update local state
+          setElements((prev) => [...prev, res.data.data]);
         }
+        setContent(htmlContent);
       } catch (error) {
-        console.error("Error saving content:", error);
+        console.error("Autosave failed:", error);
       }
     };
 
-    if (content) {
-      const timer = setTimeout(saveContent, 1000); // Save every second
-      return () => clearTimeout(timer);
-    }
-  }, [content, boardId, user?.token, elements]);
+    const timer = setTimeout(autosave, 1000);
+    return () => clearTimeout(timer);
+  }, [content, elements, boardId, user?.token]);
 
-  // Handle image upload and update elements with the correct image URL
+  // Handle image upload (Fixed)
   const handleImageUpload = async (file) => {
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("image", file);
 
     try {
       const res = await axios.post(
@@ -116,83 +126,118 @@ const Canvas = () => {
         }
       );
 
-      console.log("Image Upload Response:", res.data); // Debugging
+      console.log("Upload Response:", res.data.success);
 
-      if (!res.data.data.src) {
-        throw new Error("Image upload failed. No URL received.");
+      if (res.success && res.imageUrl) {
+        // Ensure correct image URL
+        const imageUrl = res.imageUrl.startsWith("http")
+          ? res.imageUrl
+          : `http://localhost:5000/${res.imageUrl}`;
+
+        const newElement = {
+          type: "image",
+          src: imageUrl,
+          position: { x: 100, y: 100 },
+          size: { width: 200, height: 200 },
+        };
+
+        setElements((prev) => [...prev, newElement]);
+        toast.success("Image uploaded successfully");
+      } else {
+        console.error("Image upload error: No valid URL received");
+        toast.error("Image upload failed");
       }
-
-      setElements((prev) => [...prev, res.data.data]); // Add the new image
     } catch (error) {
-      console.error("Image upload error:", error);
+      console.error("Image upload failed:", error);
+      toast.error("Image upload failed");
     }
   };
 
-  // Delete image
-  const handleDeleteImage = async (imageId) => {
-    if (!boardId || !user?.token) return;
-
+  // Update element position
+  const updateElementPosition = async (elementId, x, y) => {
     try {
-      await axios.delete(`/api/v1/boards/${boardId}/deleteImage/${imageId}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-
-      toast.success("Image deleted successfully");
-
-      // Remove the image from elements state
-      setElements((prevElements) =>
-        prevElements.filter((el) => el._id !== imageId)
+      await axios.put(
+        `/api/v1/boards/${boardId}/elements/${elementId}`,
+        { position: { x, y } },
+        { headers: { Authorization: `Bearer ${user?.token}` } }
+      );
+      setElements((prev) =>
+        prev.map((el) =>
+          el._id === elementId ? { ...el, position: { x, y } } : el
+        )
       );
     } catch (error) {
-      console.error("Error deleting image:", error);
-      toast.error("Failed to delete image");
+      console.error("Position update failed:", error);
+    }
+  };
+
+  // Delete element
+  const handleDeleteElement = async (elementId) => {
+    try {
+      await axios.delete(`/api/v1/boards/${boardId}/elements/${elementId}`, {
+        headers: { Authorization: `Bearer ${user?.token}` },
+      });
+      setElements((prev) => prev.filter((el) => el._id !== elementId));
+      toast.success("Element deleted");
+    } catch (error) {
+      console.error("Delete failed:", error);
+      toast.error("Delete failed");
     }
   };
 
   return (
     <div className="h-screen w-screen relative bg-gray-50">
-      {/* Toolbar receives the boardId and handleImageUpload */}
-      <Toolbar boardId={boardId} onImageUpload={handleImageUpload} />
+      <Toolbar
+        boardId={boardId}
+        onImageUpload={handleImageUpload}
+        boardElements={content}
+        boardName={location.state?.boardName}
+      />
 
-      {/* Main editable area */}
+      {/* Editable text area */}
       <div
         ref={boardRef}
-        className="h-full w-full p-8 focus:outline-none"
+        className="h-[75%] w-full p-8 focus:outline-none"
         contentEditable
         onInput={(e) => setContent(e.currentTarget.innerHTML)}
-        placeholder="Start typing your notes..."
-        aria-label="Canvas board"
-      ></div>
+        placeholder="Start typing..."
+        dangerouslySetInnerHTML={{ __html: content }} // Render stored HTML
+      />
 
-      {/* Render image elements over the main editable area */}
-      {elements.length > 0 ? (
-        elements.map((element) =>
-          element.type === "image" && element.src ? (
-            <div key={element._id} className="relative inline-block">
-              <img
-                src={element.src}
-                alt="Uploaded content"
-                className="absolute max-w-xs shadow-lg cursor-move"
-                style={{
-                  left: element.position?.x || 0,
-                  top: element.position?.y || 0,
-                  width: element.size?.width || "auto",
-                  height: element.size?.height || "auto",
-                }}
-              />
-              <button
-                className="absolute top-0 right-0 bg-red-500 text-white text-xs px-2 py-1 rounded-full"
-                onClick={() => handleDeleteImage(element._id)}
-                aria-label="Delete image"
-              >
-                X
-              </button>
-            </div>
-          ) : null
-        )
-      ) : (
-        <p className="text-center text-gray-400 mt-4">No elements to display</p>
-      )}
+      {/* Render draggable elements */}
+      {/* {elements.map((element) => {
+        if (element.type === "image" && element.src) {
+          return (
+            <Draggable
+              key={element._id}
+              position={element.position}
+              onStop={(e, data) => {
+                updateElementPosition(element._id, data.x, data.y);
+              }}
+            >
+              <div className="absolute cursor-move group">
+                <img
+                  // src={element.src}
+                  src="http://localhost:5000/uploads/IMG-1740909304851.jpg/"
+                  alt="Uploaded content"
+                  className="max-w-xs shadow-lg"
+                  style={{
+                    width: element.size?.width,
+                    height: element.size?.height,
+                  }}
+                />
+                <button
+                  onClick={() => handleDeleteElement(element._id)}
+                  className="absolute top-0 right-0 bg-red-500 text-white px-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  ×
+                </button>
+              </div>
+            </Draggable>
+          );
+        }
+        return null;
+      })} */}
     </div>
   );
 };
